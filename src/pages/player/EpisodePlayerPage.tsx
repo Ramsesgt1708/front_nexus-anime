@@ -32,7 +32,7 @@ const EpisodePlayerPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasShownAlert, setHasShownAlert] = useState(false);
-  const [allEpisodes, setAllEpisodes] = useState<Episode[]>([]);
+  const [allEpisodes,setAllEpisodes] = useState<Episode[]>([]);
   const [nextEpisode, setNextEpisode] = useState<Episode | null>(null);
   const [prevEpisode, setPrevEpisode] = useState<Episode | null>(null);
 
@@ -43,26 +43,19 @@ const EpisodePlayerPage = () => {
           setError("Parámetros inválidos");
           return;
         }
-
-        // Resetear estados de navegación
         setNextEpisode(null);
         setPrevEpisode(null);
-
-        // Obtener episodio
         const episodeData = await episodesService.getEpisodeById(
           parseInt(episodeId)
         );
         setEpisode(episodeData);
 
-        // Obtener datos del anime
         const animeResponse = await clientAPI.get(`/Animes/${animeId}`);
         setAnime(animeResponse.data);
 
-        // Obtener todos los episodios del anime para navegación
         const episodes = await episodesService.getEpisodesByAnimeId(parseInt(animeId));
         setAllEpisodes(episodes);
 
-        // Encontrar episodio anterior y siguiente
         const currentIndex = episodes.findIndex(ep => ep._id === episodeData._id);
         if (currentIndex > 0) {
           setPrevEpisode(episodes[currentIndex - 1]);
@@ -81,12 +74,10 @@ const EpisodePlayerPage = () => {
     fetchData();
   }, [animeId, episodeId]);
 
-  // Guardar en localStorage cuando se reproduce el video y guardar tiempo periódicamente
   useEffect(() => {
     if (episode && anime && videoRef.current) {
       const videoElement = videoRef.current;
 
-      // Guardar en historial cuando comienza a reproducir
       const handlePlay = () => {
         continueWatchingService.addToHistory({
           animeId: anime._id,
@@ -100,8 +91,6 @@ const EpisodePlayerPage = () => {
           estudio: anime.estudio,
         });
       };
-
-      // Guardar tiempo cada 10 segundos
       const handleTimeUpdate = () => {
         if (saveTimeoutRef.current) {
           clearTimeout(saveTimeoutRef.current);
@@ -130,7 +119,6 @@ const EpisodePlayerPage = () => {
     }
   }, [episode, anime]);
 
-  // Mostrar alerta y cargar progreso guardado
   useEffect(() => {
     if (
       episode &&
@@ -145,7 +133,6 @@ const EpisodePlayerPage = () => {
       );
 
       if (progress && progress.currentTime > 120 && progress.currentTime < (progress.duration || 0) - 5) {
-        // Solo mostrar si ha visto más de 2 minutos y no está casi al final
         setHasShownAlert(true);
 
         Swal.fire({
@@ -163,21 +150,16 @@ const EpisodePlayerPage = () => {
           allowEscapeKey: false,
         }).then((result) => {
           if (result.isConfirmed) {
-            // Continuar desde donde se quedó
             videoRef.current!.currentTime = progress.currentTime;
           } else {
-            // Comenzar desde el principio
             videoRef.current!.currentTime = 0;
           }
-          // Reproducir después de elegir
           videoRef.current!.play();
         });
       } else {
-        // Si no hay progreso, reproducir automáticamente desde el principio
         setHasShownAlert(true);
         videoRef.current.currentTime = 0;
         videoRef.current.play().catch(() => {
-          // Algunos navegadores requieren interacción del usuario
           console.log("Autoplay no permitido, esperar interacción");
         });
       }
@@ -260,8 +242,6 @@ const EpisodePlayerPage = () => {
               crossOrigin="anonymous"
             />
           </div>
-
-          {/* Botones de navegación entre episodios */}
           <div className="flex gap-3 mt-4 justify-between">
             {prevEpisode ? (
               <button
@@ -290,12 +270,10 @@ const EpisodePlayerPage = () => {
             )}
           </div>
         </div>
-
-        {/* Información del episodio */}
         <div className="space-y-4">
           <div className="border-t border-slate-800 pt-4">
             <h1 className="text-2xl md:text-3xl font-bold mb-2">
-              Episodio {episode.numero}: {episode.titulo}
+              Ep {episode.numero} - {episode.titulo}
             </h1>
 
             <div className="flex flex-wrap gap-4 mb-4">
@@ -325,23 +303,12 @@ const EpisodePlayerPage = () => {
             )}
           </div>
         </div>
-
-        {/* Nota sobre CORS */}
-        <div className="mt-8 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-yellow-200 text-sm">
-          <p>
-            <strong>Nota:</strong> Si el video no se reproduce, verifique que el
-            servidor de videos esté funcionando y que los certificados HTTPS
-            sean válidos.
-          </p>
-        </div>
       </main>
-
       <Footer />
     </div>
   );
 };
 
-// Función auxiliar para convertir segundos a formato MM:SS
 const formatTime = (seconds: number): string => {
   if (!seconds || isNaN(seconds)) return "0:00";
   
