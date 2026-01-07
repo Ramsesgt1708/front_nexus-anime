@@ -136,7 +136,13 @@ function DataTable(props: DataTableProps) {
       1,
       Math.ceil(filteredRows.length / paginationConfig.rowsPerPage)
     );
-    const start = 0;
+    
+    // Mantener la página actual si es válida, sino resetear a 0
+    const currentPage = paginationConfig.currentPage >= totalPages 
+      ? 0 
+      : paginationConfig.currentPage;
+    
+    const start = currentPage * paginationConfig.rowsPerPage;
     const rows = filteredRows
       .slice(start, start + paginationConfig.rowsPerPage)
       .map((row, index) => (
@@ -158,9 +164,9 @@ function DataTable(props: DataTableProps) {
     setPaginationConfig((prevConfig) => ({
       ...prevConfig,
       totalPages,
-      currentPage: 0,
-      isFirst: true,
-      isLast: totalPages <= 1,
+      currentPage,
+      isFirst: currentPage === 0,
+      isLast: currentPage === totalPages - 1 || totalPages <= 1,
       rows
     }));
   }, [filteredRows, paginationConfig.rowsPerPage, columnsFiltered]);

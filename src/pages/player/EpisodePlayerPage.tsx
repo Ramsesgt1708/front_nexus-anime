@@ -6,6 +6,8 @@ import type { Episode } from "../../services/episodes.service";
 import episodesService from "../../services/episodes.service";
 import clientAPI from "../../services/http.service";
 import continueWatchingService from "../../services/continueWatching.service";
+import watchHistoryService from "../../services/watchHistory.service";
+import authService from "../../services/auth.service";
 
 import Swal from "sweetalert2";
 
@@ -27,6 +29,8 @@ const EpisodePlayerPage = () => {
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
   const saveTimeoutRef = useRef<any | null>(null);
+  const listenersAttachedRef = useRef(false);
+  const lastProgressRef = useRef<{ time: number; duration: number }>({ time: 0, duration: 0 });
   const [episode, setEpisode] = useState<Episode | null>(null);
   const [anime, setAnime] = useState<Anime | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,50 +78,92 @@ const EpisodePlayerPage = () => {
     fetchData();
   }, [animeId, episodeId]);
 
-  useEffect(() => {
-    if (episode && anime && videoRef.current) {
-      const videoElement = videoRef.current;
+  const sendProgress = async (currentTime: number, duration: number) => {
+    const usuario = authService.getUsuario();
 
-      const handlePlay = () => {
-        continueWatchingService.addToHistory({
-          animeId: anime._id,
-          animeTitulo: anime.titulo,
-          animeImagenUrl: anime.imagenUrl,
-          episodeId: episode._id,
-          episodeNumero: episode.numero,
-          episodeTitulo: episode.titulo,
-          currentTime: videoElement.currentTime,
-          duration: videoElement.duration,
-          estudio: anime.estudio,
-        });
-      };
-      const handleTimeUpdate = () => {
-        if (saveTimeoutRef.current) {
-          clearTimeout(saveTimeoutRef.current);
-        }
+    if (usuario?._id && anime && episode) {
+      const completado = duration > 0 && (currentTime / duration) >= 0.9;
 
-        saveTimeoutRef.current = setTimeout(() => {
-          continueWatchingService.updateWatchTime(
-            anime._id,
-            episode._id,
-            videoElement.currentTime,
-            videoElement.duration
-          );
-        }, 1000);
+      const payload = {
+        usuarioId: usuario._id,
+        animeId: anime._id,
+        episodioId: episode._id,
+        tiempoReproducido: Math.floor(currentTime),
+        completado: completado,
       };
 
-      videoElement.addEventListener("play", handlePlay);
-      videoElement.addEventListener("timeupdate", handleTimeUpdate);
-
-      return () => {
-        videoElement.removeEventListener("play", handlePlay);
-        videoElement.removeEventListener("timeupdate", handleTimeUpdate);
-        if (saveTimeoutRef.current) {
-          clearTimeout(saveTimeoutRef.current);
-        }
-      };
+      try {
+        await watchHistoryService.saveProgress(payload);
+      } catch (err: any) {
+        console.error("❌ Error guardando progreso:", err);
+        console.error("❌ Detalles del error:", err?.response?.data);
+      }
+    } else {
+      // Usuario no disponible; no se guarda
     }
-  }, [episode, anime]);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      flushProgress();
+    };
+  }, []);
+
+  // Configurar eventos cuando el video se carga
+  const setupVideoListeners = () => {
+    if (!episode || !anime || !videoRef.current || listenersAttachedRef.current) {
+      return;
+    }
+
+    const videoElement = videoRef.current;
+    listenersAttachedRef.current = true;
+
+    const handlePlay = () => {
+      if (!anime || !episode) return;
+
+      continueWatchingService.addToHistory({
+        animeId: anime._id,
+        animeTitulo: anime.titulo,
+        animeImagenUrl: anime.imagenUrl,
+        episodeId: episode._id,
+        episodeNumero: episode.numero,
+        episodeTitulo: episode.titulo,
+        currentTime: videoElement.currentTime,
+        duration: videoElement.duration,
+        estudio: anime.estudio,
+      });
+    };
+
+    const handleTimeUpdate = () => {
+      if (!anime || !episode) return;
+
+      lastProgressRef.current = { time: videoElement.currentTime, duration: videoElement.duration };
+
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+
+      saveTimeoutRef.current = setTimeout(() => {
+        const currentTime = videoElement.currentTime;
+        const duration = videoElement.duration;
+
+        continueWatchingService.updateWatchTime(
+          anime._id,
+          episode._id,
+          currentTime,
+          duration
+        );
+
+        void sendProgress(currentTime, duration);
+      }, 1500);
+    };
+
+    videoElement.addEventListener("play", handlePlay);
+    videoElement.addEventListener("timeupdate", handleTimeUpdate);
+  };
 
   useEffect(() => {
     if (
@@ -160,7 +206,7 @@ const EpisodePlayerPage = () => {
         setHasShownAlert(true);
         videoRef.current.currentTime = 0;
         videoRef.current.play().catch(() => {
-          console.log("Autoplay no permitido, esperar interacción");
+          /* Autoplay no permitido */
         });
       }
     }
@@ -178,9 +224,24 @@ const EpisodePlayerPage = () => {
     );
   }
 
+  function flushProgress() {
+    const { time, duration } = lastProgressRef.current;
+    if (time > 0) {
+      void sendProgress(time, duration);
+    }
+  }
+
   const goToEpisode = (targetEpisodeId: number) => {
     if (animeId) {
+      flushProgress();
       navigate(`/watch/${animeId}/episode/${targetEpisodeId}`);
+    }
+  };
+
+  const handleBackToAnime = () => {
+    if (anime?._id) {
+      flushProgress();
+      navigate(`/anime/${anime._id}`);
     }
   };
 
@@ -191,7 +252,10 @@ const EpisodePlayerPage = () => {
         <main className="flex-1 flex flex-col items-center justify-center gap-4">
           <p className="text-red-400">{error || "Episodio no encontrado"}</p>
           <button
-            onClick={() => navigate(`/anime/${animeId}`)}
+            onClick={() => {
+              flushProgress();
+              navigate(`/anime/${animeId}`);
+            }}
             className="px-6 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-sm transition-transform hover:scale-105"
           >
             Volver a episodios
@@ -212,7 +276,7 @@ const EpisodePlayerPage = () => {
         {/* Reproductor de video */}
         {anime && (
           <button
-            onClick={() => navigate(`/anime/${anime._id}`)}
+            onClick={handleBackToAnime}
             className="text-cyan-400 hover:text-cyan-300 text-2xl flex items-center gap-2 transition-colors"
           >
             <svg
@@ -235,6 +299,9 @@ const EpisodePlayerPage = () => {
           <div className="aspect-video w-full bg-black border border-slate-800 rounded-xl overflow-hidden">
             <video
               ref={videoRef}
+                             onLoadedMetadata={setupVideoListeners}
+              onPause={flushProgress}
+              onEnded={flushProgress}
               controls
               controlsList="nodownload"
               className="w-full h-full"
