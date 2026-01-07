@@ -5,7 +5,7 @@ import clientAPI from "../../services/http.service";
 import Header from "../../components/layout/Header";
 import Footer from "../../components/layout/Footer";
 import AnimeCard from "../../components/AnimeCard";
-import { HiChevronLeft, HiChevronRight, HiX } from "react-icons/hi";
+import { HiChevronLeft, HiChevronRight } from "react-icons/hi";
 import watchHistoryService, { type WatchHistoryEntry } from "../../services/watchHistory.service";
 import authService from "../../services/auth.service";
 import episodesService from "../../services/episodes.service";
@@ -220,11 +220,6 @@ const HomePage = () => {
           {continueWatching.length > 0 && (
             <ContinueWatchingSection
               items={continueWatching}
-              onRemoveItem={(animeId) => {
-                setContinueWatching((prev) =>
-                  prev.filter((item) => item.animeId !== animeId)
-                );
-              }}
               imageErrors={imageErrors}
               onImageError={handleImageError}
             />
@@ -260,14 +255,12 @@ const HomePage = () => {
 // --- COMPONENTE CONTINÚA VIENDO ---
 interface ContinueWatchingSectionProps {
   items: ContinueWatchingItem[];
-  onRemoveItem: (animeId: number) => void;
   imageErrors: Set<number>;
   onImageError: (animeId: number) => void;
 }
 
 const ContinueWatchingSection = ({
   items,
-  onRemoveItem,
   imageErrors,
   onImageError,
 }: ContinueWatchingSectionProps) => {
@@ -355,17 +348,6 @@ const ContinueWatchingSection = ({
                 {/* Badge de episodio */}
                 <div className="absolute top-2 right-2 bg-cyan-500 text-white text-xs font-bold px-3 py-1 rounded">
                   Ep. {item.episodeNumero}
-                </div>
-
-                {/* Botón eliminar */}
-                <div
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemoveItem(item.animeId);
-                  }}
-                  className="absolute top-2 left-2 bg-red-500/80 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 cursor-pointer"
-                >
-                  <HiX className="w-4 h-4" />
                 </div>
 
                 {/* Barra de progreso */}
